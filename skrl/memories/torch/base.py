@@ -343,9 +343,14 @@ class Memory:
                  The sampled tensors will have the following shape: (number of indexes, data size)
         :rtype: list of torch.Tensor list
         """
+
         if mini_batches > 1:
             batches = BatchSampler(indexes, batch_size=len(indexes) // mini_batches, drop_last=True)
+
+            if type(indexes) is torch.Tensor:
+                return [[self.tensors_view[name][[batch]] for name in names] for batch in batches]
             return [[self.tensors_view[name][batch] for name in names] for batch in batches]
+        
         return [[self.tensors_view[name][indexes] for name in names]]
 
     def sample_all(self, names: Tuple[str], mini_batches: int = 1, sequence_length: int = 1) -> List[List[torch.Tensor]]:

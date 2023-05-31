@@ -112,7 +112,7 @@ class PPO(Agent):
         self._rollout = 0
 
         # custom
-        self._burn_in_size = self.cfg["burn_in_size"]
+        self._burn_in_len = self.cfg["burn_in_len"]
 
         self._grad_norm_clip = self.cfg["grad_norm_clip"]
         self._ratio_clip = self.cfg["ratio_clip"]
@@ -260,6 +260,14 @@ class PPO(Agent):
         self._current_log_prob = None
         self._current_next_states = None
 
+    @property
+    def burn_in_len(self):
+        return self._burn_in_len
+
+    @property
+    def mini_batch_size(self):
+        return self._mini_batches
+
     def act(self, states: torch.Tensor, timestep: int, timesteps: int) -> torch.Tensor:
         """Process the environment's states to make a decision (actions) using the main policy
 
@@ -394,7 +402,7 @@ class PPO(Agent):
                     **rnn_states,
                 )
 
-        # update RNN states
+        # update RNN states TODO: re-implement this
         if self._rnn:
             self._rnn_final_states["value"] = (
                 self._rnn_final_states["policy"]
@@ -538,7 +546,7 @@ class PPO(Agent):
             names=self._tensors_names,
             batch_size=16,  # mini_batches * mini_batch_size  
             mini_batches=self._mini_batches,
-            sequence_length=self._burn_in_size + 1,
+            sequence_length=self._burn_in_len + 1,
         )
 
         rnn_policy, rnn_value = {}, {}
@@ -553,13 +561,12 @@ class PPO(Agent):
         cumulative_entropy_loss = 0
         cumulative_value_loss = 0
 
-        #TODO: indices of non burn-in steps (actual samples)
-        indices = torch.arange(self._burn_in_size, sampled_batches[0][0].size()[0], self._burn_in_size + 1)
+        #TODO: indices of non burn-in steps (actual samples) (DONE)
+        indices = torch.arange(self._burn_in_len, sampled_batches[0][0].size()[0], self._burn_in_len + 1)
 
         # learning epochs
         for epoch in range(self._learning_epochs):
             kl_divergences = []
-            print("\nepoch ", epoch)
 
             # mini-batches loop
             for i, (
@@ -572,7 +579,6 @@ class PPO(Agent):
                 sampled_returns,
                 sampled_advantages,
             ) in enumerate(sampled_batches):
-                print("mini batch", i)
                 if self._rnn:
                     if self.policy is self.value:
                         rnn_policy = {
@@ -611,7 +617,8 @@ class PPO(Agent):
                     {
                         "states": sampled_states,
                         "taken_actions": sampled_actions,
-                        "rewards": sampled_rewards, #TODO: add rewards
+                        "rewards": sampled_rewards, #TODO: add rewards (DONE)
+                        #TODO: add dones here and reset if needed
                         **rnn_policy,
                     },
                     role="policy",
@@ -620,7 +627,7 @@ class PPO(Agent):
                 # compute aproximate KL divergence
                 with torch.no_grad():
                     # ratio = next_log_prob - sampled_log_prob
-                    ratio = next_log_prob - sampled_log_prob[indices]    # TODO: don't take burn-in steps into account
+                    ratio = next_log_prob - sampled_log_prob[indices]    # TODO: don't take burn-in steps into account (DONE)
                     kl_divergence = ((torch.exp(ratio) - 1) - ratio).mean()
                     kl_divergences.append(kl_divergence)
 
@@ -654,7 +661,8 @@ class PPO(Agent):
                 # predicted_values, _, _ = self.value.act(
                 #     {"states": sampled_states, **rnn_value}, role="value"
                 # )
-                #TODO: add taken actions and rewards for burnin
+
+                #TODO: add taken actions and rewards for burnin (DONE)
                 predicted_values, _, _ = self.value.act(
                     {"states": sampled_states, 
                     "taken_actions": sampled_actions,
